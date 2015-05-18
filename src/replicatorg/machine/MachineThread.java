@@ -197,7 +197,7 @@ class MachineThread extends Thread {
 	 * @param source GCodeSource to work from
 	 * @return a new GCodeSourceCollection including warmup/cooldown code (if it is loaded)
 	 */
-	GCodeSource buildGCodeJob(GCodeSource source) {
+	GCodeSource  buildGCodeJob(GCodeSource source) {
 		Vector<GCodeSource> sources = new Vector<GCodeSource>();
 		sources.add(new StringListSource(warmupCommands));
 		sources.add(source);

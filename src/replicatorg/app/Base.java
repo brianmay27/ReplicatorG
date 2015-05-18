@@ -75,12 +75,13 @@ import javax.swing.KeyStroke;
 import javax.swing.SwingUtilities;
 import javax.swing.UIManager;
 
+import replicatorg.app.gcode.MutableGCodeSource;
 import replicatorg.app.ui.MainWindow;
 import replicatorg.app.ui.NotificationHandler;
 import replicatorg.drivers.DriverQueryInterface;
-import replicatorg.machine.MachineLoader;
-import replicatorg.machine.MachineInterface;
+import replicatorg.machine.*;
 import replicatorg.machine.model.MachineType;
+import replicatorg.model.GCodeSource;
 import replicatorg.uploader.FirmwareUploader;
 import ch.randelshofer.quaqua.QuaquaManager;
 
@@ -483,58 +484,58 @@ public class Base {
 							+ "Java 1.5 or later to run properly.\n"
 							+ "Please visit java.com to upgrade.", null);
 		}
-
-		if (Base.isMacOS()) {
-	         // Default to sun's XML parser, PLEASE.  Some apps are installing some janky-ass xerces.
-	         System.setProperty("javax.xml.parsers.DocumentBuilderFactory",
-	        		 "com.sun.org.apache.xerces.internal.jaxp.DocumentBuilderFactoryImpl");
-		 System.setProperty("com.apple.mrj.application.apple.menu.about.name",
-				    "ReplicatorG");
-		}
+//
+//		if (Base.isMacOS()) {
+//	         // Default to sun's XML parser, PLEASE.  Some apps are installing some janky-ass xerces.
+//	         System.setProperty("javax.xml.parsers.DocumentBuilderFactory",
+//	        		 "com.sun.org.apache.xerces.internal.jaxp.DocumentBuilderFactoryImpl");
+//		 System.setProperty("com.apple.mrj.application.apple.menu.about.name",
+//				    "ReplicatorG");
+//		}
 		
 		boolean cleanPrefs = false;
 		
 		// parse command line input
 		for (int i=0;i<args.length;i++) {
-			if (args[i].equals("--alternate-prefs")) {
-				if((i+1) < args.length) {
-					i++;
-					setAlternatePrefs(args[i]);
-				}
-			} else if (args[i].equals("--clean-prefs")) {
-				cleanPrefs = true;
-			} else if(args[i].equals("--debug")) {
-				// Allow for [--debug] [DEBUGLEVEL]
-				int debugLevelArg = 2;
-				if((i+1) < args.length) {
-					try {
-						debugLevelArg = Integer.parseInt(args[i+1]);
-						i++;
-					} catch (NumberFormatException e) {};
-				}
-				if(debugLevelArg == 0) {
-					logger.setLevel(Level.INFO);
-					logger.info("Debug level is 'INFO'");
-				} else if(debugLevelArg == 1) {
-					logger.setLevel(Level.FINE);
-					logger.info("Debug level is 'FINE'");
-				} else if(debugLevelArg == 2) {
-					logger.setLevel(Level.FINER);
-					logger.info("Debug level is 'FINER'");
-				} else if(debugLevelArg == 3) {
-					logger.setLevel(Level.FINEST);
-					logger.info("Debug level is 'FINEST'");
-				} else if(debugLevelArg >= 4) {
-					logger.setLevel(Level.ALL);
-					logger.info("Debug level is 'ALL'");
-				}
-			} else if(args[i].startsWith("-")){
-				System.out.println("Usage: ./replicatorg [--debug DEBUGLEVEL] [--alternate-prefs ALTERNATE_PREFS_NAME] [--clean-prefs] [filename.stl]");
-				System.exit(1);
-			} else if (supportedExtension(args[i])) {
-				// grab any opened file from the command line
-				Base.openedAtStartup = args[i];
-			}
+//			if (args[i].equals("--alternate-prefs")) {
+//				if((i+1) < args.length) {
+//					i++;
+//					setAlternatePrefs(args[i]);
+//				}
+//			} else if (args[i].equals("--clean-prefs")) {
+//				cleanPrefs = true;
+//			} else if(args[i].equals("--debug")) {
+//				// Allow for [--debug] [DEBUGLEVEL]
+//				int debugLevelArg = 2;
+//				if((i+1) < args.length) {
+//					try {
+//						debugLevelArg = Integer.parseInt(args[i+1]);
+//						i++;
+//					} catch (NumberFormatException e) {};
+//				}
+//				if(debugLevelArg == 0) {
+//					logger.setLevel(Level.INFO);
+//					logger.info("Debug level is 'INFO'");
+//				} else if(debugLevelArg == 1) {
+//					logger.setLevel(Level.FINE);
+//					logger.info("Debug level is 'FINE'");
+//				} else if(debugLevelArg == 2) {
+//					logger.setLevel(Level.FINER);
+//					logger.info("Debug level is 'FINER'");
+//				} else if(debugLevelArg == 3) {
+//					logger.setLevel(Level.FINEST);
+//					logger.info("Debug level is 'FINEST'");
+//				} else if(debugLevelArg >= 4) {
+//					logger.setLevel(Level.ALL);
+//					logger.info("Debug level is 'ALL'");
+//				}
+//			} else if(args[i].startsWith("-")){
+//				System.out.println("Usage: ./replicatorg [--debug DEBUGLEVEL] [--alternate-prefs ALTERNATE_PREFS_NAME] [--clean-prefs] [filename.stl]");
+//				System.exit(1);
+//			} else if (supportedExtension(args[i])) {
+//				// grab any opened file from the command line
+//				Base.openedAtStartup = args[i];
+//			}
 		}
 		
 
@@ -542,28 +543,35 @@ public class Base {
 		System.setProperty("java.net.useSystemProxies", "true");
     	// Use antialiasing implicitly
 		System.setProperty("j3d.implicitAntialiasing", "true");
+
+		MachineCallbackHandler handler = new MachineCallbackHandler();
+		Machine machine = MachineFactory.load("Replicator Duel", handler);
+		File file = new File("test.gcode");
+		GCodeSource source = new MutableGCodeSource(file);
+		machine.buildDirect(source);
 		
 		// Start the firmware check thread.
-		FirmwareUploader.checkFirmware();
-		
-		// MAC OS X ONLY:
-		// register a temporary/early version of the mrj open document handler,
-		// because the event may be lost (sometimes, not always) by the time
-		// that MainWindow is properly constructed.
-		MRJOpenDocumentHandler startupOpen = new MRJOpenDocumentHandler() {
-			public void handleOpenFile(File file) {
-				// this will only get set once.. later will be handled
-				// by the MainWindow version of this fella
-				if (Base.openedAtStartup == null) {
-					Base.openedAtStartup = file.getAbsolutePath();
-				}
-			}
-		};
-		MRJApplicationUtils.registerOpenDocumentHandler(startupOpen);
-
-		// Create the new application "Base" class.
-		new Base(cleanPrefs);
+//		FirmwareUploader.checkFirmware();
+//
+//		// MAC OS X ONLY:
+//		// register a temporary/early version of the mrj open document handler,
+//		// because the event may be lost (sometimes, not always) by the time
+//		// that MainWindow is properly constructed.
+//		MRJOpenDocumentHandler startupOpen = new MRJOpenDocumentHandler() {
+//			public void handleOpenFile(File file) {
+//				// this will only get set once.. later will be handled
+//				// by the MainWindow version of this fella
+//				if (Base.openedAtStartup == null) {
+//					Base.openedAtStartup = file.getAbsolutePath();
+//				}
+//			}
+//		};
+//		MRJApplicationUtils.registerOpenDocumentHandler(startupOpen);
+//
+//		// Create the new application "Base" class.
+//		new Base(cleanPrefs);
 	}
+
 	/** Check that the correct directories are writeable, and issue warnings. */
 	private void checkDirectories() {
 		// Warn about read-only user directories
